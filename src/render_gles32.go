@@ -502,6 +502,10 @@ func (t *Texture_GLES32) GetHeight() int32 {
 	return t.height
 }
 
+func (t *Texture_GLES32) GetFilter() bool {
+	return t.filter
+}
+
 func (t *Texture_GLES32) MapUploadType(i int32) uint32 {
 	switch i {
 	case 96, 128:

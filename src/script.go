@@ -888,6 +888,82 @@ func luaKeyToString(k lua.LValue) string {
 
 // -------------------------------------------------------------------------------------------------
 // Register external functions to be called from Lua scripts
+// Resolve a batchDraw item once for both drawing and mouse hit detection.
+func luaDrawAnim(item *lua.LTable) *Anim {
+	luaAnim := item.RawGetString("anim")
+	ud, ok := luaAnim.(*lua.LUserData)
+	if !ok {
+		return nil
+	}
+
+	anim, ok := ud.Value.(*Anim)
+	if !ok {
+		return nil
+	}
+
+	x := float32(lua.LVAsNumber(item.RawGetString("x")))
+	y := float32(lua.LVAsNumber(item.RawGetString("y")))
+	facing := float32(lua.LVAsNumber(item.RawGetString("facing")))
+
+	anim.SetPos(anim.offsetInit[0], anim.offsetInit[1])
+	anim.AddPos(x, y)
+	anim.facing = facing
+
+	aSnap := *anim
+
+	if v := item.RawGetString("scale"); v.Type() == lua.LTTable {
+		sTbl := v.(*lua.LTable)
+		sclX := float32(lua.LVAsNumber(sTbl.RawGetInt(1)))
+		sclY := float32(lua.LVAsNumber(sTbl.RawGetInt(2)))
+		if sclX != 0 || sclY != 0 {
+			(&aSnap).SetScale(sclX, sclY)
+		}
+	}
+
+	if v := item.RawGetString("xshear"); v != lua.LNil {
+		aSnap.xshear = float32(lua.LVAsNumber(v))
+	}
+
+	if v := item.RawGetString("angle"); v != lua.LNil {
+		aSnap.rot.angle = float32(lua.LVAsNumber(v))
+	}
+	if v := item.RawGetString("xangle"); v != lua.LNil {
+		aSnap.rot.xangle = float32(lua.LVAsNumber(v))
+	}
+	if v := item.RawGetString("yangle"); v != lua.LNil {
+		aSnap.rot.yangle = float32(lua.LVAsNumber(v))
+	}
+
+	if v := item.RawGetString("projection"); v != lua.LNil {
+		switch v.Type() {
+		case lua.LTNumber:
+			aSnap.projection = int32(lua.LVAsNumber(v))
+		case lua.LTString:
+			switch strings.ToLower(strings.TrimSpace(v.String())) {
+			case "orthographic":
+				aSnap.projection = int32(Projection_Orthographic)
+			case "perspective":
+				aSnap.projection = int32(Projection_Perspective)
+			case "perspective2":
+				aSnap.projection = int32(Projection_Perspective2)
+			}
+		}
+	}
+
+	if v := item.RawGetString("focallength"); v != lua.LNil {
+		aSnap.fLength = float32(lua.LVAsNumber(v))
+	}
+
+	layerVal := item.RawGetString("layerno")
+	layer := aSnap.layerno
+	if layerVal != lua.LNil {
+		layer = int16(lua.LVAsNumber(layerVal))
+	}
+
+	aSnap.layerno = layer
+	return &aSnap
+}
+
 func systemScriptInit(l *lua.LState) {
 	triggerRedirection(l)
 	triggerFunctions(l)
@@ -1031,7 +1107,9 @@ func systemScriptInit(l *lua.LState) {
 		/*Queue drawing of an animation on a render layer.
 		@function animDraw
 		@tparam Anim anim Animation userdata.
-		@tparam[opt] int16 layer Render layer index; if omitted, the animation's own `layerno` is used.*/
+		@tparam[opt] int16 layer Render layer index; if omitted, the animation's own `layerno` is used.
+		@tparam[opt=false] boolean capture Return the queued draw state for mouse hit testing.
+		@treturn Anim|nil snapshot The queued animation state when capture is enabled.*/
 		a, ok := toUserData(l, 1).(*Anim)
 		if !ok {
 			userDataError(l, 1, a)
@@ -1043,8 +1121,12 @@ func systemScriptInit(l *lua.LState) {
 		aSnap := *a
 		layerLocal := layer
 		sys.luaQueueLayerDraw(int(layerLocal), func() {
-			(&aSnap).Draw(layerLocal)
+			aSnap.Draw(layerLocal)
 		})
+		if !nilArg(l, 3) && boolArg(l, 3) {
+			l.Push(newUserData(l, &aSnap))
+			return 1
+		}
 		return 0
 	})
 	luaRegister(l, "animGetLength", func(*lua.LState) int {
@@ -1917,79 +1999,14 @@ func systemScriptInit(l *lua.LState) {
 				return
 			}
 
-			luaAnim := item.RawGetString("anim")
-			ud, ok := luaAnim.(*lua.LUserData)
-			if !ok {
+			aSnap := luaDrawAnim(item)
+			if aSnap == nil {
 				return
 			}
-
-			anim, ok := ud.Value.(*Anim)
-			if !ok {
-				return
-			}
-
-			x := float32(lua.LVAsNumber(item.RawGetString("x")))
-			y := float32(lua.LVAsNumber(item.RawGetString("y")))
-			facing := float32(lua.LVAsNumber(item.RawGetString("facing")))
-
-			anim.SetPos(anim.offsetInit[0], anim.offsetInit[1])
-			anim.AddPos(x, y)
-			anim.facing = facing
-
-			aSnap := *anim
-
-			if v := item.RawGetString("scale"); v.Type() == lua.LTTable {
-				sTbl := v.(*lua.LTable)
-				sclX := float32(lua.LVAsNumber(sTbl.RawGetInt(1)))
-				sclY := float32(lua.LVAsNumber(sTbl.RawGetInt(2)))
-				if sclX != 0 || sclY != 0 {
-					(&aSnap).SetScale(sclX, sclY)
-				}
-			}
-
-			if v := item.RawGetString("xshear"); v != lua.LNil {
-				aSnap.xshear = float32(lua.LVAsNumber(v))
-			}
-
-			if v := item.RawGetString("angle"); v != lua.LNil {
-				aSnap.rot.angle = float32(lua.LVAsNumber(v))
-			}
-			if v := item.RawGetString("xangle"); v != lua.LNil {
-				aSnap.rot.xangle = float32(lua.LVAsNumber(v))
-			}
-			if v := item.RawGetString("yangle"); v != lua.LNil {
-				aSnap.rot.yangle = float32(lua.LVAsNumber(v))
-			}
-
-			if v := item.RawGetString("projection"); v != lua.LNil {
-				switch v.Type() {
-				case lua.LTNumber:
-					aSnap.projection = int32(lua.LVAsNumber(v))
-				case lua.LTString:
-					switch strings.ToLower(strings.TrimSpace(v.String())) {
-					case "orthographic":
-						aSnap.projection = int32(Projection_Orthographic)
-					case "perspective":
-						aSnap.projection = int32(Projection_Perspective)
-					case "perspective2":
-						aSnap.projection = int32(Projection_Perspective2)
-					}
-				}
-			}
-
-			if v := item.RawGetString("focallength"); v != lua.LNil {
-				aSnap.fLength = float32(lua.LVAsNumber(v))
-			}
-
-			layerVal := item.RawGetString("layerno")
 			layer := aSnap.layerno
-			if layerVal != lua.LNil {
-				layer = int16(lua.LVAsNumber(layerVal))
-			}
-
 			layerLocal := layer
 			sys.luaQueueLayerDraw(int(layerLocal), func() {
-				(&aSnap).Draw(layerLocal)
+				aSnap.Draw(layerLocal)
 			})
 		})
 		return 0
@@ -3645,6 +3662,100 @@ func systemScriptInit(l *lua.LState) {
 		l.Push(lua.LString(data))
 		return 1
 	})
+	luaRegister(l, "mouseOver", func(l *lua.LState) int {
+		/*Check the pointer against a UI element or a rectangle in local coordinates.
+		@function mouseOver
+		@tparam Rect|Anim|TextSprite|table|number target Element, batchDraw item, or rectangle left edge.
+		For a Rect, optional x1,y1,x2,y2 replace its bounds without changing it.
+		For numeric bounds, pass x1,y1,x2,y2,localcoordX,localcoordY.
+		An optional TextSprite after Rect bounds supplies the menu clipping window.
+		@tparam[opt=false] boolean pixels If true, only the visible parts of an animation count, so clicks on its transparent areas are ignored.
+		@treturn boolean inside*/
+		previous := sys.captureAspectState()
+		if sys.shouldComposeFullResolution() || sys.textInput.active {
+			sys.restoreAspectState(aspectStateForSize(sys.scrrect[2], sys.scrrect[3]))
+		}
+		defer sys.restoreAspectState(previous)
+		inside := false
+		if ud, ok := l.Get(1).(*lua.LUserData); ok {
+			switch v := ud.Value.(type) {
+			case *Rect:
+				r := *v
+				if !nilArg(l, 2) {
+					r.SetWindow([4]float32{float32(numArg(l, 2)), float32(numArg(l, 3)), float32(numArg(l, 4)), float32(numArg(l, 5))})
+				}
+				inside = sys.mouse.over(r.drawWindow())
+				if clip, ok := l.Get(6).(*lua.LUserData); ok {
+					if ts, ok := clip.Value.(*TextSprite); ok {
+						inside = inside && sys.mouse.over(ts.drawWindow())
+					}
+				}
+			case *Anim:
+				inside = sys.mouse.overAnim(v, !nilArg(l, 2) && boolArg(l, 2))
+			case *TextSprite:
+				inside = sys.mouse.overText(v)
+			}
+		} else if item, ok := l.Get(1).(*lua.LTable); ok {
+			inside = sys.mouse.overAnim(luaDrawAnim(item), !nilArg(l, 2) && boolArg(l, 2))
+		} else if !nilArg(l, 1) {
+			r := NewRect()
+			r.SetLocalcoord(float32(numArg(l, 5)), float32(numArg(l, 6)))
+			r.SetWindow([4]float32{float32(numArg(l, 1)), float32(numArg(l, 2)), float32(numArg(l, 3)), float32(numArg(l, 4))})
+			inside = sys.mouse.over(r.drawWindow())
+		}
+		l.Push(lua.LBool(inside))
+		return 1
+	})
+	luaRegister(l, "mouseInput", func(l *lua.LState) int {
+		/*Consume one mouse press or wheel movement, optionally as a menu action.
+		@function mouseInput
+		@tparam table buttons Mouse bindings from the action's keymouse parameter.
+		@tparam[opt] table keys Action keys forwarded to getInput/getInputTime.
+		@tparam[opt=-1] int player 1-based local player slot, or all menu players.
+		@treturn boolean pressed*/
+		var buttons []string
+		if keys, ok := l.Get(1).(*lua.LTable); ok {
+			for i := 1; i <= keys.Len(); i++ {
+				buttons = append(buttons, keys.RawGetInt(i).String())
+			}
+		}
+		pressed := sys.mouse.button(buttons)
+		if pressed {
+			if keys, ok := l.Get(2).(*lua.LTable); ok && keys.Len() > 0 {
+				player := -1
+				if !nilArg(l, 3) && numArg(l, 3) > 0 {
+					player = int(numArg(l, 3)) - 1
+				}
+				sys.mouse.queue([]string{keys.RawGetInt(1).String()}, player)
+			}
+		}
+		l.Push(lua.LBool(pressed))
+		return 1
+	})
+	luaRegister(l, "mouseSetInput", func(l *lua.LState) int {
+		/*Forward a mouse choice through the usual menu input path.
+		@function mouseSetInput
+		@tparam table keys A sequence of engine keys. Netplay sends each as a separate press.
+		@tparam[opt=-1] int player 1-based local player slot.*/
+		keys := l.CheckTable(1)
+		var buttons []string
+		for i := 1; i <= keys.Len(); i++ {
+			buttons = append(buttons, keys.RawGetInt(i).String())
+		}
+		player := -1
+		if !nilArg(l, 2) && numArg(l, 2) > 0 {
+			player = int(numArg(l, 2)) - 1
+		}
+		sys.mouse.queue(buttons, player)
+		return 0
+	})
+	luaRegister(l, "mouseActive", func(l *lua.LState) int {
+		/*Whether the mouse was the last UI input used.
+		@function mouseActive
+		@treturn boolean active*/
+		l.Push(lua.LBool(sys.motif.Mouse.Enabled && sys.mouse.active))
+		return 1
+	})
 	luaRegister(l, "getInput", func(l *lua.LState) int {
 		/*Check raw UI input for one or more players.
 		@function getInput
@@ -3860,6 +3971,10 @@ func systemScriptInit(l *lua.LState) {
 					keys = []string{string(t)}
 				default:
 					continue
+				}
+				if sys.mouse.input(keys, controllerIdx) {
+					l.Push(lua.LNumber(1))
+					return 1
 				}
 				for _, key := range keys {
 					if out := keyTime(controllerIdx, key); out > 0 {
@@ -6462,6 +6577,7 @@ func systemScriptInit(l *lua.LState) {
 		}
 		sys.stepCommandLists()
 		sys.uiFrameCounter++
+		sys.mouse.reset()
 		if !sys.update() {
 			l.RaiseError("<game end>")
 		}
