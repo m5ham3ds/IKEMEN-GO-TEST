@@ -1233,7 +1233,7 @@ function main.f_warning(text, sec, background, overlay, titleData, textData, can
 		local value = nil
 		if getValue ~= nil then
 			value = getValue()
-		elseif getKey() ~= '' or getInput(-1, {'U', 'D', 'L', 'R', 'a', 'b', 'c', 'x', 'y', 'z', 's', 'd', 'w', 'm'}) then
+		elseif getInput(-1, sec.menu.done.key) then
 			value = true
 		end
 		if value ~= nil then
@@ -3731,7 +3731,7 @@ function main.f_menuMouse(t, item, sec)
 	if data == nil or data.items ~= t then
 		return nil
 	end
-	for _, action in ipairs({m.save, m.hiscore, m.subtract, m.add}) do
+	for _, action in ipairs({m.hiscore, m.subtract, m.add}) do
 		if #action.key > 0 and mouseInput(action.keymouse, action.key) then
 			return nil
 		end
@@ -3994,7 +3994,7 @@ function main.f_menuCommonDraw(t, item, cursorPosY, moveTxt, sec, bg, skipClear,
 	local forceInactive = (opts.forceInactive == true)
 	local actions = opts.hintActions or {}
 	sec.mouseData = {
-		items = t, rows = {}, backgrounds = {}, adjust = opts.hintContext == 'adjust' or opts.hintContext == 'profilechange',
+		items = t, rows = {}, backgrounds = {}, adjust = opts.hintContext == 'adjust',
 		done = actions['menu.done'] or m.done.key,
 		cancel = actions['menu.cancel'] or m.cancel.key,
 		add = actions['menu.add'] or m.add.key,
