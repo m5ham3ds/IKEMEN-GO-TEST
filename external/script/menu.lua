@@ -527,16 +527,9 @@ function menu.f_start()
 		if v.movelist then
 			local t = v.sec.movelist
 			if t.window.margins.y[1] ~= 0 or t.window.margins.y[2] ~= 0 then
-				local fontProps = motif.files.font['font' .. v.sec.movelist.text.font[1]]
-				if fontProps ~= nil then
-					menu.movelistW = {
-						0,
-						math.max(0, t.pos[2] + t.text.offset[2] - t.window.margins.y[1]),
-						t.pos[1] + t.text.offset[1] + t.window.width,
-						t.pos[2] + t.text.offset[2] + (t.window.visibleitems - 1) * main.f_round((fontProps.size[2] + fontProps.spacing[2]) * t.text.scale[2] + t.text.spacing[2]) + t.window.margins.y[2] + math.max(0, t.text.glyphs.offset[2])
-					}
-					textImgSetWindow(t.text.TextSpriteData, menu.movelistW[1], menu.movelistW[2], menu.movelistW[3], menu.movelistW[4])
-				end
+				menu.movelistW = main.f_menuWindow(t, t.text.offset)
+				menu.movelistW[4] = menu.movelistW[4] + math.max(0, t.text.glyphs.offset[2])
+				textImgSetWindow(t.text.TextSpriteData, menu.movelistW[1], menu.movelistW[2], menu.movelistW[3], menu.movelistW[4])
 			end
 		end
 	end
@@ -806,10 +799,16 @@ function menu.f_commandlistRender(sec, t)
 	else
 		table.insert(cmdList, {{text = sec.movelist.text.text, align = 1}})
 	end
-	if not fadeActive() and #cmdList > sec.movelist.window.visibleitems then
+	local visible = sec.movelist.window.visibleitems
+	if visible <= 0 then
+		visible = #cmdList
+	end
+	local maxFirst = math.max(1, #cmdList - visible + 1)
+	t.tbl.movelistLine = math.max(1, math.min(t.tbl.movelistLine, maxFirst))
+	if not fadeActive() and #cmdList > visible then
 		if t.tbl.movelistLine > 1 and mouseOver(sec.movelist.arrow.up.AnimData) then
 			mouseInput(sec.menu.done.keymouse, sec.menu.previous.key)
-		elseif t.tbl.movelistLine <= #cmdList - sec.movelist.window.visibleitems and mouseOver(sec.movelist.arrow.down.AnimData) then
+		elseif t.tbl.movelistLine < maxFirst and mouseOver(sec.movelist.arrow.down.AnimData) then
 			mouseInput(sec.menu.done.keymouse, sec.menu.next.key)
 		end
 	end
@@ -834,7 +833,7 @@ function menu.f_commandlistRender(sec, t)
 	elseif getInput(-1, sec.menu.previous.key) and t.tbl.movelistLine > 1 then
 		sndPlay(motif.Snd, sec.cursor.move.snd[1], sec.cursor.move.snd[2])
 		t.tbl.movelistLine = t.tbl.movelistLine - 1
-	elseif getInput(-1, sec.menu.next.key) and t.tbl.movelistLine <= #cmdList - sec.movelist.window.visibleitems then
+	elseif getInput(-1, sec.menu.next.key) and t.tbl.movelistLine < maxFirst then
 		sndPlay(motif.Snd, sec.cursor.move.snd[1], sec.cursor.move.snd[2])
 		t.tbl.movelistLine = t.tbl.movelistLine + 1
 	end
@@ -846,12 +845,11 @@ function menu.f_commandlistRender(sec, t)
 	textImgDraw(sec.movelist.title.TextSpriteData)
 	--draw commands
 	local i = 0
-	for n = t.tbl.movelistLine, math.min(t.tbl.movelistLine + sec.movelist.window.visibleitems + 1, #cmdList) do
+	for n = t.tbl.movelistLine, math.min(t.tbl.movelistLine + visible + 1, #cmdList) do
 		i = i + 1
 		local alignOffset = 0
 		local lengthOffset = 0
 		local align = 1
-		local width = 0
 		for k, v in ipairs(cmdList[n]) do
 			if v.text ~= '' then
 				alignOffset = 0
@@ -864,7 +862,6 @@ function menu.f_commandlistRender(sec, t)
 					lengthOffset = 0
 					align = v.align
 				end
-				local fontProps = motif.files.font['font' .. sec.movelist.text.font[1]]
 				local sprite = sec.movelist.text.TextSpriteData
 				textImgReset(sprite)
 				local align = v.align
@@ -873,13 +870,10 @@ function menu.f_commandlistRender(sec, t)
 				end
 				local textWidth = textImgGetTextWidth(sprite, v.text) * sec.movelist.text.scale[1]
 				textImgSetAlign(sprite, align)
-				textImgAddPos(sprite, alignOffset + lengthOffset,
-					main.f_round((fontProps.size[2] + fontProps.spacing[2]) * sec.movelist.text.scale[2] + sec.movelist.text.spacing[2]) * (i - 1))
+				textImgAddPos(sprite, alignOffset + lengthOffset + (n - 1) * sec.movelist.item.spacing[1], (i - 1) * sec.movelist.item.spacing[2])
 				textImgSetText(sprite, v.text)
 				textImgDraw(sprite)
-				if k < #cmdList[n] then
-					width = textWidth + sec.movelist.text.spacing[1]
-				end
+				local width = k < #cmdList[n] and textWidth or 0
 				if v.align == 0 and lengthOffset == 0 then
 					lengthOffset = lengthOffset + width / 2
 				elseif v.align == -1 then
@@ -891,12 +885,12 @@ function menu.f_commandlistRender(sec, t)
 		end
 	end
 	--draw scroll arrows
-	if #cmdList > sec.movelist.window.visibleitems then
+	if #cmdList > visible then
 		if t.tbl.movelistLine > 1 then
 			animUpdate(sec.movelist.arrow.up.AnimData)
 			animDraw(sec.movelist.arrow.up.AnimData)
 		end
-		if t.tbl.movelistLine <= #cmdList - sec.movelist.window.visibleitems then
+		if t.tbl.movelistLine < maxFirst then
 			animUpdate(sec.movelist.arrow.down.AnimData)
 			animDraw(sec.movelist.arrow.down.AnimData)
 		end

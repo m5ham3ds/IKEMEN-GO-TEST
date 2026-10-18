@@ -1324,10 +1324,10 @@ type MenuInfoProperties struct {
 			TextProperties
 			Uppercase bool `ini:"uppercase"`
 		} `ini:"title"`
-		Text struct {
-			TextProperties
+		Text TextProperties `ini:"text"`
+		Item struct {
 			Spacing [2]float32 `ini:"spacing"`
-		} `ini:"text"`
+		} `ini:"item"`
 		Window struct {
 			Margins struct {
 				Y [2]float32 `ini:"y"`
