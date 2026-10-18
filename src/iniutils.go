@@ -2308,6 +2308,19 @@ func SetTextSprite(obj interface{}, fVal, structVal, parent reflect.Value) {
 
 	// textImgNew
 	ts := NewTextSprite()
+	if fv, ok := get("Glyphs"); ok && fv.IsValid() {
+		if glyphs, ok := fv.Interface().(TextGlyphProperties); ok {
+			ts.glyphOffset = glyphs.Offset
+			ts.glyphScale = glyphs.Scale
+			if len(glyphs.Spacing) > 0 {
+				spacing := glyphs.Spacing[0]
+				ts.glyphSpacing = &spacing
+			}
+		}
+	}
+	ts.glyphOffsetInit = ts.glyphOffset
+	ts.glyphScaleInit = ts.glyphScale
+	ts.glyphSpacingInit = ts.glyphSpacing
 	// textImgSetFont
 	fntField := objVal.FieldByName("Fnt")
 	key := reflect.ValueOf(int(font[0]))

@@ -180,6 +180,12 @@ type AnimationStagePreloadProperties struct {
 	AnimData    *Anim
 }
 
+type TextGlyphProperties struct {
+	Offset  [2]float32 `ini:"offset"`
+	Scale   [2]float32 `ini:"scale" default:"1,1"`
+	Spacing []float32  `ini:"spacing"`
+}
+
 type TextProperties struct {
 	Font           [8]int32   `ini:"font" default:"-1,0,0,255,255,255,255,-1"`
 	Offset         [2]float32 `ini:"offset"`
@@ -194,6 +200,7 @@ type TextProperties struct {
 	Layerno        int16      `ini:"layerno"`
 	Window         [4]int32   `ini:"window"`
 	Localcoord     [2]int32   `ini:"localcoord"`
+	Glyphs TextGlyphProperties `ini:"glyphs"`
 	TextSpriteData *TextSprite
 }
 
@@ -211,6 +218,7 @@ type TextMapProperties struct {
 	Layerno        int16             `ini:"layerno"`
 	Window         [4]int32          `ini:"window"`
 	Localcoord     [2]int32          `ini:"localcoord"`
+	Glyphs TextGlyphProperties `ini:"glyphs"`
 	TextSpriteData *TextSprite
 }
 
@@ -1285,14 +1293,6 @@ type ReplayInfoProperties struct {
 	Hint HintProperties `ini:"hint"`
 }
 
-type MovelistGlyphsProperties struct {
-	Offset     [2]float32 `ini:"offset"`
-	Scale      [2]float32 `ini:"scale" default:"1,1"`
-	Layerno    int16      `ini:"layerno"`
-	Localcoord [2]int32   `ini:"localcoord"`
-	Spacing    [2]float32 `ini:"spacing"`
-}
-
 type MenuInfoProperties struct {
 	Enabled  bool           `ini:"enabled"`
 	FadeIn   FadeProperties `ini:"fadein"`
@@ -1328,7 +1328,6 @@ type MenuInfoProperties struct {
 			TextProperties
 			Spacing [2]float32 `ini:"spacing"`
 		} `ini:"text"`
-		Glyphs MovelistGlyphsProperties `ini:"glyphs"`
 		Window struct {
 			Margins struct {
 				Y [2]float32 `ini:"y"`
@@ -2163,7 +2162,6 @@ func loadMotif(def string) (*Motif, error) {
 	m.overrideParams()
 	m.fixLocalcoordOverrides()
 	m.inheritCursorCellOverrides()
-	m.applyGlyphDefaultsFromMovelist()
 	m.populateDataPointers()
 	m.applyPostParsePosAdjustments()
 
@@ -2298,43 +2296,6 @@ func (m *Motif) namedGlyph(name string) *Animation {
 		return m.glyphAnimation(g.Spr[0], g.Spr[1])
 	}
 	return nil
-}
-
-// Propagates movelist.glyphs defaults.
-func (m *Motif) applyGlyphDefaultsFromMovelist() {
-	if m == nil {
-		return
-	}
-	if len(m.Glyphs) == 0 {
-		return
-	}
-
-	// Use [Pause Menu] movelist glyph defaults as the global baseline.
-	var mg MovelistGlyphsProperties
-	if m.PauseMenu != nil {
-		if pm := m.PauseMenu["pause_menu"]; pm != nil {
-			mg = pm.Movelist.Glyphs
-		} else {
-			// Best-effort fallback: first available pause menu entry.
-			for _, pm := range m.PauseMenu {
-				if pm != nil {
-					mg = pm.Movelist.Glyphs
-					break
-				}
-			}
-		}
-	} else {
-		return
-	}
-	for _, g := range m.Glyphs {
-		if g == nil {
-			continue
-		}
-		g.Offset = mg.Offset
-		g.Scale = mg.Scale
-		g.Layerno = mg.Layerno
-		g.Localcoord = mg.Localcoord
-	}
 }
 
 // If an element is customized in userIniFile but its localcoord is missing/empty,

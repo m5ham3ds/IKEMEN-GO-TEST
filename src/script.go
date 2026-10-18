@@ -7732,6 +7732,7 @@ func systemScriptInit(l *lua.LState) {
 		  - `"window"` – reset window to initial
 		  - `"velocity"` – reset velocity to initial
 		  - `"text"` – reset text to initial
+		  - `"glyphs"` – reset glyph scale, offset and spacing
 		  - `"palfx"` – clear PalFX
 		  - `"delay"` – reset text delay timer*/
 		ts, ok := toUserData(l, 1).(*TextSprite)
@@ -7759,6 +7760,10 @@ func systemScriptInit(l *lua.LState) {
 					ts.SetVelocity(ts.velocityInit[0], ts.velocityInit[1])
 				case "text":
 					ts.text = ts.textInit
+				case "glyphs":
+					ts.glyphScale = ts.glyphScaleInit
+					ts.glyphOffset = ts.glyphOffsetInit
+					ts.glyphSpacing = ts.glyphSpacingInit
 				case "palfx":
 					if ts.palfx != nil {
 						ts.palfx.clear()
@@ -7897,24 +7902,44 @@ func systemScriptInit(l *lua.LState) {
 		ts.glyphSource = int(numArg(l, 2))
 		return 0
 	})
-	luaRegister(l, "textImgSetGlyphStyle", func(*lua.LState) int {
-		/*Set inline glyph scale and offset relative to the text's font height.
-		@function textImgSetGlyphStyle
+	luaRegister(l, "textImgSetGlyphOffset", func(*lua.LState) int {
+		/*Set the inline glyph offset.
+		@function textImgSetGlyphOffset
 		@tparam TextSprite ts Text sprite userdata.
-		@tparam number scaleX Horizontal glyph scale.
-		@tparam number scaleY Vertical glyph scale.
-		@tparam number offsetX Horizontal glyph offset.
-		@tparam number offsetY Vertical glyph offset.
-		@tparam[opt] number spacing Horizontal space after a glyph, in font units; defaults to font spacing.*/
+		@tparam number x Horizontal offset.
+		@tparam number y Vertical offset.*/
+		ts, ok := toUserData(l, 1).(*TextSprite)
+		if !ok {
+			userDataError(l, 1, ts)
+		}
+		ts.glyphOffset = [2]float32{float32(numArg(l, 2)), float32(numArg(l, 3))}
+		return 0
+	})
+	luaRegister(l, "textImgSetGlyphScale", func(*lua.LState) int {
+		/*Set the inline glyph scale.
+		@function textImgSetGlyphScale
+		@tparam TextSprite ts Text sprite userdata.
+		@tparam number x Horizontal scale.
+		@tparam number y Vertical scale.*/
 		ts, ok := toUserData(l, 1).(*TextSprite)
 		if !ok {
 			userDataError(l, 1, ts)
 		}
 		ts.glyphScale = [2]float32{float32(numArg(l, 2)), float32(numArg(l, 3))}
-		ts.glyphOffset = [2]float32{float32(numArg(l, 4)), float32(numArg(l, 5))}
+		return 0
+	})
+	luaRegister(l, "textImgSetGlyphSpacing", func(*lua.LState) int {
+		/*Set horizontal spacing at boundaries involving inline glyphs (applied once per boundary).
+		@function textImgSetGlyphSpacing
+		@tparam TextSprite ts Text sprite userdata.
+		@tparam[opt] number spacing Horizontal spacing, or nil to use font/text spacing.*/
+		ts, ok := toUserData(l, 1).(*TextSprite)
+		if !ok {
+			userDataError(l, 1, ts)
+		}
 		ts.glyphSpacing = nil
-		if !nilArg(l, 6) {
-			spacing := float32(numArg(l, 6))
+		if !nilArg(l, 2) {
+			spacing := float32(numArg(l, 2))
 			ts.glyphSpacing = &spacing
 		}
 		return 0
